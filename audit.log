@@ -1,0 +1,3 @@
+[2026-05-27 18:57:04] user=admin action=login detail=success
+[2026-05-27 18:57:31] user=admin action=add_record detail=add id=1 owner=123456 type=hello
+[2026-05-27 18:57:33] user=admin action=list_records detail=masked
