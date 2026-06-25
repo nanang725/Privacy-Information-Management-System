@@ -3,6 +3,7 @@
 * 隐私信息管理系统 v3.0 【数据结构期末大作业 高分完整版】
 * 技术点：单向链表 | 文件持久化 | 软删除 | 权限控制 | 数据脱敏 | 多字段搜索
 * 拓展功能：冒泡+快速排序 | 分页展示 | 数据合法性校验 | 日志管理 | 安全处理
+* 新增功能：批量生成测试数据（管理员专属）
 * ============================================================================
 */
 
@@ -26,7 +27,7 @@
 #define MASK_KEEP_BACK 2
 #define LOGIN_MAX_TRY 3
 #define PAGE_SIZE 10
-#define MAX_RECORDS 1000   // 快速排序辅助数组上限
+#define MAX_RECORDS 2000   // 快速排序辅助数组上限（已扩容以支持批量生成）
 
 // ====================== 结构体定义 ======================
 typedef struct {
@@ -91,6 +92,7 @@ static void query_audit_log(void);
 static void clear_audit_log(void);
 static void sort_menu(void);
 static void print_complexity_report(void);
+static void generate_test_data(void);  // 新增：批量生成测试数据
 
 static void print_main_menu(void);
 
@@ -753,9 +755,9 @@ static void sort_menu(void) {
 	printf("\n╔═══════════════════════════════════════════════════════════╗\n");
 	printf("║                    链表排序功能                          ║\n");
 	printf("╠═══════════════════════════════════════════════════════════╣\n");
-	printf("║ 1. 按ID冒泡排序     2. 按姓名冒泡排序                   ║\n");
-	printf("║ 3. 按ID快速排序     4. 按姓名快速排序                   ║\n");
-	printf("║ 5. 查看复杂度报告   0. 返回                             ║\n");
+	printf("║ 1.按ID冒泡排序     2.按姓名冒泡排序                     ║\n");
+	printf("║ 3.按ID快速排序     4.按姓名快速排序                     ║\n");
+	printf("║ 5.查看复杂度报告   0.返回                               ║\n");
 	printf("╚═══════════════════════════════════════════════════════════╝\n");
 	printf("请选择：");
 	
@@ -773,6 +775,75 @@ static void sort_menu(void) {
 	}
 }
 
+// ====================== 新增：批量生成测试数据 ======================
+static void generate_test_data(void) {
+	if (!g_current_user.is_admin) {
+		printf("× 仅管理员可使用此功能！\n");
+		return;
+	}
+	
+	int num;
+	printf("\n---------- 批量生成测试数据 ----------\n");
+	printf("请输入要生成的记录数量（1~2000）：");
+	if (scanf("%d", &num) != 1 || num < 1 || num > 2000) {
+		printf("× 输入无效，请输入1~2000之间的整数！\n");
+		clear_stdin_line();
+		return;
+	}
+	clear_stdin_line();
+	
+	// 初始化随机种子
+	srand((unsigned)time(NULL));
+	
+	const char *surnames[] = {"张", "李", "王", "刘", "陈", "杨", "赵", "黄", "周", "吴"};
+	const char *types[] = {"身份证", "银行卡", "手机号", "邮箱", "社保号"};
+	
+	printf("正在生成 %d 条测试记录...\n", num);
+	
+	for (int i = 0; i < num; i++) {
+		PrivacyRecordNode *node = create_node();
+		if (!node) {
+			printf("⚠ 内存分配失败，已生成 %d 条\n", i);
+			break;
+		}
+		
+		node->id = get_next_id();
+		node->is_deleted = 0;
+		
+		// 随机姓名：姓氏 + 名字（随机数字后缀）
+		safe_strcpy(node->owner_name, surnames[rand() % 10], MAX_NAME_LEN);
+		char temp[16];
+		sprintf(temp, "%d", rand() % 1000 + 1);
+		strcat(node->owner_name, temp);
+		
+		// 随机证件号（模拟18位身份证格式）
+		sprintf(node->id_number, "1101011990%04d%04d", rand() % 10000, rand() % 10000);
+		
+		// 随机电话（11位手机号）
+		sprintf(node->phone, "138%08d", rand() % 100000000);
+		
+		// 随机信息类型
+		safe_strcpy(node->info_type, types[rand() % 5], MAX_TYPE_LEN);
+		
+		// 备注
+		sprintf(node->remark, "测试数据 %d", i + 1);
+		
+		// 插入链表尾部
+		if (!g_record_head) {
+			g_record_head = node;
+		} else {
+			PrivacyRecordNode *p = g_record_head;
+			while (p->next) p = p->next;
+			p->next = node;
+		}
+	}
+	
+	save_records();
+	printf("√ 成功生成 %d 条测试记录！\n", num);
+	log_action(g_current_user.username, "generate_test", "batch");
+}
+
+// ====================== 主菜单 ======================
 static void print_main_menu(void) {
 	printf("\n╔═══════════════════════════════════════════════════════════╗\n");
 	printf("║           隐私信息管理系统 v3.0           		    ║\n");
@@ -780,9 +851,9 @@ static void print_main_menu(void) {
 	printf("║ 当前用户：%-10s（%-8s）                          ║\n",
 		g_current_user.username, g_current_user.is_admin ? "管理员" : "普通用户");
 	printf("╠═══════════════════════════════════════════════════════════╣\n");
-	printf("║ 1.新增  2.脱敏列表  3.分页  4.详情  5.搜索  6.修改        ║\n");
-	printf("║ 7.删除  8.已删记录  9.恢复 10.导出 11.日志 12.清日志      ║\n");
-	printf("║ 13.排序 0.退出                                            ║\n");
+	printf("║ 1.新增  2.脱敏列表  3.分页  4.详情  5.搜索  6.修改     ║\n");
+	printf("║ 7.删除  8.已删记录  9.恢复 10.导出 11.日志 12.清日志    ║\n");
+	printf("║ 13.排序 14.生成测试数据  0.退出                         ║\n");
 	printf("╚═══════════════════════════════════════════════════════════╝\n");
 	printf("请输入选项：");
 }
@@ -817,6 +888,7 @@ int main(void) {
 			case 11: query_audit_log(); break;
 			case 12: clear_audit_log(); break;
 			case 13: sort_menu(); break;
+			case 14: generate_test_data(); break;  // 新增功能
 		case 0:
 			save_records();
 			printf("√ 数据已保存，系统正常退出！\n");
